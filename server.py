@@ -17,9 +17,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. Create uploads folder and mount it for static file access
-UPLOAD_DIR = "uploads"
+
+# AI Generated Starts here
+import tempfile
+from datetime import datetime, timezone
+
+# 1. Store in /tmp/uploads on Linux (Render) or tempdir on Windows
+UPLOAD_DIR = "/tmp/uploads" if os.name != "nt" else os.path.join(tempfile.gettempdir(), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Mount /images (and /uploads for backwards compatibility)
+app.mount("/images", StaticFiles(directory=UPLOAD_DIR), name="images")
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
@@ -28,26 +36,26 @@ async def root():
     return {"message": "FastAPI WebSocket chat server is running"}
 
 
-# 2. HTTP POST route to upload an image
+# 2. HTTP POST route /upload-photo (multipart/form-data)
+@app.post("/upload-photo")
 @app.post("/upload")
-async def upload_image(request: Request, file: UploadFile = File(...)):
+async def upload_photo(file: UploadFile = File(...)):
     # Extract extension (e.g. .jpg, .png)
     file_ext = os.path.splitext(file.filename)[1] or ".jpg"
     unique_filename = f"{uuid.uuid4().hex}{file_ext}"
     file_path = os.path.join(UPLOAD_DIR, unique_filename)
 
-    # Save incoming image to disk
+    # Save incoming image to disk (/tmp/uploads)
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Construct the public URL
-    # On Render, use https scheme:
-    base_url = str(request.base_url).rstrip("/")
-    if "onrender.com" in base_url and base_url.startswith("http://"):
-        base_url = base_url.replace("http://", "https://")
+    return {
+        "filename": unique_filename,
+        "url": f"/images/{unique_filename}",
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+    }
 
-    image_url = f"{base_url}/uploads/{unique_filename}"
-    return {"imageUrl": image_url}
+# AI Generated ends here, rest is from the websocket mob08 activity
 
 
 # 3. WebSocket Connection Manager (remains the same)
